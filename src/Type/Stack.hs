@@ -1,10 +1,3 @@
-{-# LANGUAGE DataKinds
-           , PolyKinds
-           , TypeFamilies
-           , TypeOperators
-  #-}
-{-# OPTIONS_HADDOCK show-extensions #-}
-
 {-|
 Module      : Type.Stack
 Description : Type level list of transformers as a transformer
@@ -24,6 +17,13 @@ This documentation refers to anything of kind @(* -> *) -> (* -> *)@ as a
 "transformer". Most usefully these will be monad transfomers, but not all
 tools in this library require transformers to be instances of 'MonadTrans'.
 -}
+
+{-# LANGUAGE DataKinds
+           , PolyKinds
+           , TypeFamilies
+           , TypeOperators
+  #-}
+{-# OPTIONS_HADDOCK show-extensions #-}
 
 module Type.Stack
   ( Stack
