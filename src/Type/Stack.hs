@@ -26,7 +26,9 @@ tools in this library require transformers to be instances of 'MonadTrans'.
 -}
 
 module Type.Stack
-  (Stack)
+  ( Stack
+  , type (@@)
+  )
 where
 
 import Data.Functor.Identity (Identity)
@@ -45,3 +47,17 @@ MaybeT (ReaderT Int Identity)
 type family Stack fs
   where Stack '[] = Identity
         Stack (f : fs) = f (Stack fs)
+
+{-|
+An infix operator for 'Stack'ing a list of transformers and applying
+the result to a type.
+
+These types are equivalent:
+
+@
+[ReaderT Int, MaybeT] @@ Bool
+Stack [ReaderT Int, MaybeT] Bool
+ReaderT Int (MaybeT Identity) Bool
+@
+-}
+type fs @@ a = Stack fs a
