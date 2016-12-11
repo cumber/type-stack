@@ -37,7 +37,7 @@ tools in this library require transformers to be instances of 'MonadTrans'.
 module Type.Stack
   ( Stack
   , type (@@)
-  , liftStackBase
+  , liftStack
   )
 where
 
@@ -47,8 +47,6 @@ import qualified Data.Constraint as Constraint
 import Data.Constraint ((:-))
 import qualified Data.Constraint.Lifting as Constraint
 import qualified Data.Constraint.Unsafe as Constraint
-
-import Data.Functor.Identity (Identity)
 
 import Data.Kind (Constraint)
 
@@ -64,17 +62,13 @@ Stack [MaybeT, ReaderT Int]
 MaybeT (ReaderT Int Identity)
 @
 -}
-type family Stack fs = r | r -> fs
-  where Stack '[] = Identity
-        Stack (f : fs) = f (Stack fs)
-
-newtype StackBase fs (base :: * -> *) a
-  = StackBase { unStack :: (ApplyNested fs base) a }
+newtype Stack fs (base :: * -> *) a
+  = Stack { unStack :: (ApplyAll fs base) a }
 
 
-type family ApplyNested fs base
-  where ApplyNested '[] base = base
-        ApplyNested (f : fs) base = f (ApplyNested fs base)
+type family ApplyAll fs base
+  where ApplyAll '[] base = base
+        ApplyAll (f : fs) base = f (ApplyAll fs base)
 
 
 {-|
@@ -92,49 +86,49 @@ ReaderT Int (MaybeT Identity) Bool
 type fs @@ a = Stack fs a
 
 
-class LiftStackBase fs
-  where liftStackBase :: Monad base => base a -> StackBase fs base a
+class LiftStack fs
+  where liftStack :: Monad base => base a -> Stack fs base a
 
-instance LiftStackBase '[]
-  where liftStackBase = StackBase
+instance LiftStack '[]
+  where liftStack = Stack
 
-instance (MonadTrans f, LiftStackBase fs, All (Constraint.Lifting Monad) fs, NestedLifting fs) => LiftStackBase (f : fs)
-  where liftStackBase
+instance (MonadTrans f, LiftStack fs, All (Constraint.Lifting Monad) fs, StackLifting fs) => LiftStack (f : fs)
+  where liftStack
           :: forall base a
            . Monad base
-          => base a -> StackBase (f : fs) base a
+          => base a -> Stack (f : fs) base a
 
-        liftStackBase
+        liftStack
           = case nestedLifting @ fs @ Monad @ base of
               Constraint.Sub Constraint.Dict
                 ->  case underiveStack @ Monad @ fs @ base of
                       Constraint.Sub Constraint.Dict
-                        ->  StackBase . lift . unStack . liftStackBase @ fs
+                        ->  Stack . lift . unStack . liftStack @ fs
 
 
-type family All constraint (ts :: [(* -> *) -> (* -> *)]) = (r :: Constraint) | r -> ts
+type family All constraint ts :: Constraint
   where All c '[] = ()
         All c (t : ts) = (c t, All c ts)
 
 
-deriveStack :: c (ApplyNested fs base) :- c (StackBase fs base)
+deriveStack :: c (ApplyAll fs base) :- c (Stack fs base)
 deriveStack = Constraint.unsafeCoerceConstraint
 
 
-underiveStack :: c (StackBase fs base) :- c (ApplyNested fs base)
+underiveStack :: c (Stack fs base) :- c (ApplyAll fs base)
 underiveStack = Constraint.unsafeCoerceConstraint
 
 
-class NestedLifting fs
+class StackLifting fs
   where nestedLifting
          :: c base
-         => All (Constraint.Lifting c) fs :- c (StackBase fs base)
+         => All (Constraint.Lifting c) fs :- c (Stack fs base)
 
-instance NestedLifting '[]
+instance StackLifting '[]
   where nestedLifting
          :: forall c base
           . c base
-         => () :- c (StackBase '[] base)
+         => () :- c (Stack '[] base)
 
         nestedLifting
           = Constraint.Sub
@@ -142,12 +136,12 @@ instance NestedLifting '[]
                   Constraint.Sub Constraint.Dict -> Constraint.Dict
               )
 
-instance NestedLifting fs => NestedLifting (f : fs)
+instance StackLifting fs => StackLifting (f : fs)
   where nestedLifting
          :: forall c base
           . c base
          => All (Constraint.Lifting c) (f : fs)
-              :-  c (StackBase (f : fs) base)
+              :-  c (Stack (f : fs) base)
 
         nestedLifting
           = Constraint.Sub
@@ -155,7 +149,7 @@ instance NestedLifting fs => NestedLifting (f : fs)
                   Constraint.Sub Constraint.Dict
                     ->  case underiveStack @ c @ fs @ base of
                           Constraint.Sub Constraint.Dict
-                            ->  case Constraint.lifting @ c @ f @ (ApplyNested fs base) of
+                            ->  case Constraint.lifting @ c @ f @ (ApplyAll fs base) of
                                   Constraint.Sub Constraint.Dict
                                     ->  case deriveStack @ c @ (f : fs) @ base of
                                           Constraint.Sub Constraint.Dict
